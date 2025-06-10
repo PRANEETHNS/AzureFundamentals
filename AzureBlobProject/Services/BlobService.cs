@@ -1,5 +1,7 @@
 ﻿using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Azure.Storage.Blobs.Specialized;
+using Azure.Storage.Sas;
 using AzureBlobProject.Models;
 using System.ComponentModel;
 using System.Xml.Linq;
@@ -71,11 +73,51 @@ namespace AzureBlobProject.Services
             return "";
         }
 
-        public async Task<BlobModel> GetBlobWithUri(string containerName)
+        public async Task<List<BlobModel>> GetBlobWithUri(string containerName)
         {
-            throw new NotImplementedException();
-            //BlobContainerClient blobContainerClient = _blobClient.GetBlobContainerClient(containerName);
-            //var blobClient = blobContainerClient.GetBlobClient(name);
-        }
+			BlobContainerClient blobContainerClient = _blobClient.GetBlobContainerClient(containerName);
+			var blobs = blobContainerClient.GetBlobsAsync();
+
+			List<BlobModel> blobList = new List<BlobModel>();
+			await foreach (var blob in blobs)
+			{
+                var blobClient = blobContainerClient.GetBlockBlobClient(blob.Name);
+                BlobModel blobModel = new BlobModel() { 
+                    Uri = blobClient.Uri.AbsoluteUri
+                    
+                };
+
+                if (blobClient.CanGenerateSasUri)
+                {
+                    BlobSasBuilder blobSasBuilder = new BlobSasBuilder()
+                    {
+                        BlobContainerName = blobClient.GetParentBlobContainerClient().Name,
+                        BlobName = blob.Name,
+                        Resource = "b",
+                        ExpiresOn = DateTime.UtcNow.AddHours(1)
+                    };
+
+                    blobSasBuilder.SetPermissions(BlobAccountSasPermissions.Read);
+
+                    blobModel.Uri = blobClient.GenerateSasUri(blobSasBuilder).AbsoluteUri;
+
+                }
+                
+
+                BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
+
+                if (blobProperties.Metadata.ContainsKey("title")) 
+                {
+					blobModel.Title = blobProperties.Metadata["title"];
+				}
+				if (blobProperties.Metadata.ContainsKey("comment"))
+				{
+					blobModel.Comment = blobProperties.Metadata["comment"];
+				}
+                blobList.Add(blobModel);
+			}
+
+			return blobList;
+		}
     }
 }

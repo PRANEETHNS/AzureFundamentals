@@ -6,7 +6,7 @@ namespace AzureBlobProject.Services
     {
         Task<List<string>> GetAllBlobs(string containerName);
 
-        Task <BlobModel> GetBlobWithUri(string containerName);
+        Task<List<BlobModel>> GetBlobWithUri(string containerName);
 
         Task <string> GetBlob(string name, string container);
 
